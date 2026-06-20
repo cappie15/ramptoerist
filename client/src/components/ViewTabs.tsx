@@ -14,8 +14,8 @@ export function ViewTabs() {
     <nav
       style={{
         display: 'flex',
-        background: '#fff',
-        borderBottom: '1px solid #e2e8f0',
+        background: 'var(--rt-surface)',
+        borderBottom: '1px solid var(--rt-border)',
       }}
     >
       {TABS.map((tab) => {
@@ -29,8 +29,8 @@ export function ViewTabs() {
               padding: '12px 8px',
               background: 'none',
               border: 'none',
-              borderBottom: active ? '3px solid #e53e3e' : '3px solid transparent',
-              color: active ? '#e53e3e' : '#718096',
+              borderBottom: active ? '3px solid var(--rt-accent)' : '3px solid transparent',
+              color: active ? 'var(--rt-accent)' : 'var(--rt-text-muted)',
               fontWeight: active ? 700 : 500,
               fontSize: '0.9rem',
               cursor: 'pointer',

@@ -3,11 +3,15 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useIncidents } from '../hooks/useIncidents'
 import { useVehicles } from '../hooks/useVehicles'
 import { useGeolocation } from '../hooks/useGeolocation'
+import { useTheme } from '../contexts/ThemeContext'
 import { IncidentList } from '../components/IncidentList'
 import { IncidentMap } from '../components/IncidentMap'
 import { IncidentDetail } from '../components/IncidentDetail'
 import { SearchBar } from '../components/SearchBar'
+import { TimeFilter } from '../components/TimeFilter'
+import { RadiusSlider } from '../components/RadiusSlider'
 import { haversineDistance } from '../utils/distance'
+import { filterByTime, type TimeRange } from '../utils/filters'
 import type { Incident } from '../types'
 
 type LeftView = 'nearby' | 'recent'
@@ -16,24 +20,18 @@ interface Props {
   isDesktop: boolean
 }
 
-const APP_STYLE: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  height: '100dvh',
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  background: '#f7fafc',
-}
-
 export function SplitLayout({ isDesktop }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { theme, toggle } = useTheme()
 
-  // Derive selected incident id from URL
   const urlMatch = location.pathname.match(/^\/incident\/(.+)$/)
   const selectedId = urlMatch ? urlMatch[1] : null
 
   const [activeView, setActiveView] = useState<LeftView>('nearby')
   const [searchQuery, setSearchQuery] = useState('')
+  const [timeRange, setTimeRange] = useState<TimeRange>('2h')
+  const [radiusKm, setRadiusKm] = useState(12)
   const [detailIncident, setDetailIncident] = useState<Incident | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
@@ -42,12 +40,10 @@ export function SplitLayout({ isDesktop }: Props) {
   const vehicles = useVehicles()
   const { coords, loading: geoLoading, error: geoError, request } = useGeolocation()
 
-  // Request geolocation when switching to nearby
   useEffect(() => {
     if (activeView === 'nearby' && !coords) request()
   }, [activeView, coords, request])
 
-  // Fetch full incident detail when selected id changes
   useEffect(() => {
     if (!selectedId) {
       setDetailIncident(null)
@@ -66,28 +62,37 @@ export function SplitLayout({ isDesktop }: Props) {
   const handleSelect = (id: string) => navigate(`/incident/${id}`)
   const handleClose = () => navigate(-1)
 
-  // Filter + sort for nearby view
+  const timeFiltered = filterByTime(incidents, timeRange)
+
   const displayedIncidents =
     activeView === 'nearby' && coords
-      ? incidents
+      ? timeFiltered
           .filter((i) => i.lat != null && i.lng != null)
           .map((i) => ({ i, d: haversineDistance(coords, { lat: i.lat!, lng: i.lng! }) }))
-          .filter(({ d }) => d <= 50)
+          .filter(({ d }) => d <= radiusKm)
           .sort((a, b) => a.d - b.d)
           .map(({ i }) => i)
-      : incidents
+      : timeFiltered
 
   const leftWidth = isDesktop ? '340px' : '42%'
   const showRightPanel = isDesktop && selectedId
   const showOverlay = !isDesktop && selectedId
 
   return (
-    <div style={APP_STYLE}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100dvh',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        background: 'var(--rt-bg)',
+      }}
+    >
       {/* ── Header ── */}
       <header
         style={{
-          background: '#1a202c',
-          color: '#fff',
+          background: 'var(--rt-header-bg)',
+          color: 'var(--rt-header-text)',
           padding: '10px 16px',
           display: 'flex',
           alignItems: 'center',
@@ -100,13 +105,37 @@ export function SplitLayout({ isDesktop }: Props) {
           <div style={{ fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.02em' }}>
             Ramptoerist
           </div>
-          <div style={{ fontSize: '0.68rem', color: '#a0aec0' }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--rt-header-sub)' }}>
             P2000 · 112 · Realtime incidenten
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#718096', display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div
+          style={{
+            marginLeft: 'auto',
+            fontSize: '0.72rem',
+            color: 'var(--rt-header-sub)',
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center',
+          }}
+        >
           <span>{incidents.length} incidenten</span>
           {vehicles.length > 0 && <span>{vehicles.length} voertuigen</span>}
+          <button
+            onClick={toggle}
+            aria-label="Schakel donker/licht thema"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '1.1rem',
+              padding: '2px 4px',
+              color: 'var(--rt-header-sub)',
+              lineHeight: 1,
+            }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
       </header>
 
@@ -120,13 +149,13 @@ export function SplitLayout({ isDesktop }: Props) {
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
-            borderRight: '1px solid #e2e8f0',
-            background: '#fff',
+            borderRight: '1px solid var(--rt-border)',
+            background: 'var(--rt-surface)',
             overflow: 'hidden',
           }}
         >
           {/* 2-tab nav */}
-          <nav style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+          <nav style={{ display: 'flex', borderBottom: '1px solid var(--rt-border)', flexShrink: 0 }}>
             {(['nearby', 'recent'] as LeftView[]).map((view) => {
               const active = activeView === view
               return (
@@ -138,8 +167,8 @@ export function SplitLayout({ isDesktop }: Props) {
                     padding: '11px 8px',
                     background: 'none',
                     border: 'none',
-                    borderBottom: active ? '3px solid #e53e3e' : '3px solid transparent',
-                    color: active ? '#e53e3e' : '#718096',
+                    borderBottom: active ? '3px solid var(--rt-accent)' : '3px solid transparent',
+                    color: active ? 'var(--rt-accent)' : 'var(--rt-text-muted)',
                     fontWeight: active ? 700 : 500,
                     fontSize: '0.88rem',
                     cursor: 'pointer',
@@ -159,14 +188,25 @@ export function SplitLayout({ isDesktop }: Props) {
             })}
           </nav>
 
-          {/* Search (recent only) */}
+          {/* Nearby controls */}
+          {activeView === 'nearby' && (
+            <>
+              <RadiusSlider value={radiusKm} onChange={setRadiusKm} />
+              <TimeFilter value={timeRange} onChange={setTimeRange} />
+            </>
+          )}
+
+          {/* Recent controls */}
           {activeView === 'recent' && (
-            <SearchBar onSearch={setSearchQuery} value={searchQuery} />
+            <>
+              <SearchBar onSearch={setSearchQuery} value={searchQuery} />
+              <TimeFilter value={timeRange} onChange={setTimeRange} />
+            </>
           )}
 
           {/* Nearby status messages */}
           {activeView === 'nearby' && geoLoading && (
-            <div style={{ padding: '10px 14px', fontSize: '0.82rem', color: '#718096' }}>
+            <div style={{ padding: '10px 14px', fontSize: '0.82rem', color: 'var(--rt-text-muted)' }}>
               📍 Locatie ophalen…
             </div>
           )}
@@ -175,9 +215,9 @@ export function SplitLayout({ isDesktop }: Props) {
               style={{
                 margin: '8px',
                 padding: '10px 12px',
-                background: '#fff5f5',
+                background: 'var(--rt-error-bg)',
                 borderRadius: '8px',
-                color: '#e53e3e',
+                color: 'var(--rt-error-text)',
                 fontSize: '0.8rem',
               }}
             >
@@ -188,7 +228,7 @@ export function SplitLayout({ isDesktop }: Props) {
                   display: 'block',
                   marginTop: '6px',
                   padding: '6px 12px',
-                  background: '#e53e3e',
+                  background: 'var(--rt-accent)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
@@ -204,13 +244,13 @@ export function SplitLayout({ isDesktop }: Props) {
             <div
               style={{
                 padding: '5px 12px',
-                background: '#ebf8ff',
+                background: 'var(--rt-info-bg)',
                 fontSize: '0.73rem',
-                color: '#2b6cb0',
+                color: 'var(--rt-info-text)',
                 flexShrink: 0,
               }}
             >
-              📍 {displayedIncidents.length} incidenten binnen 50 km
+              📍 {displayedIncidents.length} incidenten binnen {radiusKm} km
             </div>
           )}
 
@@ -251,15 +291,15 @@ export function SplitLayout({ isDesktop }: Props) {
             style={{
               width: '380px',
               flexShrink: 0,
-              borderLeft: '1px solid #e2e8f0',
-              background: '#fff',
+              borderLeft: '1px solid var(--rt-border)',
+              background: 'var(--rt-surface)',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
             }}
           >
             {detailLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#718096' }}>
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--rt-text-muted)' }}>
                 Laden…
               </div>
             ) : detailIncident ? (
@@ -268,7 +308,7 @@ export function SplitLayout({ isDesktop }: Props) {
           </div>
         )}
 
-        {/* ── Tablet detail overlay (slides over map) ── */}
+        {/* ── Tablet detail overlay ── */}
         {showOverlay && (
           <div
             style={{
@@ -277,14 +317,14 @@ export function SplitLayout({ isDesktop }: Props) {
               right: 0,
               bottom: 0,
               width: '58%',
-              background: '#fff',
+              background: 'var(--rt-surface)',
               boxShadow: '-4px 0 20px rgba(0,0,0,0.12)',
               overflowY: 'auto',
               zIndex: 100,
             }}
           >
             {detailLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#718096' }}>
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--rt-text-muted)' }}>
                 Laden…
               </div>
             ) : detailIncident ? (
