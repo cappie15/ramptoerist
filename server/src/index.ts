@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { db } from './db/database'
 import { incidentRouter } from './routes/incidents'
+import { vehicleRouter } from './routes/vehicles'
 import { MockConnector } from './connectors/MockConnector'
 import { normalizeMessage, normalizeText } from './normalizer'
 import { findOrCreateIncident } from './deduplicator'
@@ -51,6 +52,7 @@ app.get('/api/search', (req, res) => {
 })
 
 app.use('/api/incidents', incidentRouter)
+app.use('/api/vehicles', vehicleRouter)
 
 app.get('/api/sources', (_req, res) => {
   res.json([

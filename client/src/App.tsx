@@ -42,8 +42,9 @@ export function App() {
         </header>
 
         <Routes>
+          <Route path="/" element={<Navigate to="/nearby" replace />} />
           <Route
-            path="/"
+            path="/recent"
             element={
               <>
                 <ViewTabs />
@@ -76,7 +77,7 @@ export function App() {
             }
           />
           <Route path="/incident/:id" element={<div style={{ flex: 1, overflowY: 'auto' }}><IncidentDetailPage /></div>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/nearby" replace />} />
         </Routes>
       </div>
     </BrowserRouter>

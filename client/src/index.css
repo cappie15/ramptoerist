@@ -28,3 +28,29 @@ body {
   height: 100%;
   width: 100%;
 }
+
+/* Custom Leaflet markers — reset Leaflet defaults */
+.rt-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.rt-incident-icon {
+  display: block;
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.rt-vehicle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  background: #1a365d;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}

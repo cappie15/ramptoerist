@@ -53,3 +53,18 @@ export interface GeoCoords {
   lat: number
   lng: number
 }
+
+export type VehicleType = 'brandweer' | 'ambulance' | 'politie' | 'traumaheli' | 'knrm' | 'other'
+
+export interface EmergencyVehicle {
+  id: string
+  type: VehicleType
+  callSign: string
+  lat: number
+  lng: number
+  speed: number
+  heading: number
+  lastSeenAt: string
+  source: 'flitsmeister'
+  linkedIncidentId: string | null
+}

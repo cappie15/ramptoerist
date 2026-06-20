@@ -1,97 +1,187 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { Incident } from '../types'
-import { CATEGORY_COLORS } from './CategoryIcon'
+import type { Incident, EmergencyVehicle } from '../types'
 import type { GeoCoords } from '../types'
 
-function makeIcon(category: string) {
-  const color = CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ?? '#718096'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/>
-    <circle cx="14" cy="14" r="6" fill="#fff" opacity="0.9"/>
-  </svg>`
+const INCIDENT_ICONS: Record<string, string> = {
+  fire: '🔥',
+  ambulance: '🚑',
+  police: '🚔',
+  traumaheli: '🚁',
+  rescue: '🚤',
+  traffic: '🚧',
+  other: '🔔',
+}
+
+const VEHICLE_ICONS: Record<string, string> = {
+  brandweer: '🚒',
+  ambulance: '🚑',
+  politie: '🚓',
+  traumaheli: '🚁',
+  knrm: '⛵',
+  other: '🚐',
+}
+
+function incidentIcon(category: string): L.DivIcon {
   return L.divIcon({
-    html: svg,
-    className: '',
-    iconSize: [28, 36],
-    iconAnchor: [14, 36],
-    popupAnchor: [0, -36],
+    html: `<span class="rt-incident-icon">${INCIDENT_ICONS[category] ?? '🔔'}</span>`,
+    className: 'rt-marker',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -20],
+  })
+}
+
+function vehicleIcon(type: string): L.DivIcon {
+  return L.divIcon({
+    html: `<span class="rt-vehicle-icon">${VEHICLE_ICONS[type] ?? '🚐'}</span>`,
+    className: 'rt-marker',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -16],
   })
 }
 
 interface Props {
   incidents: Incident[]
+  vehicles?: EmergencyVehicle[]
   userCoords?: GeoCoords | null
-  selectedId?: string | null
   onSelectIncident?: (id: string) => void
   height?: string
 }
 
-export function IncidentMap({ incidents, userCoords, selectedId: _selectedId, onSelectIncident, height = '100%' }: Props) {
+export function IncidentMap({
+  incidents,
+  vehicles = [],
+  userCoords,
+  onSelectIncident,
+  height = '100%',
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const markersRef = useRef<L.Marker[]>([])
+  const incidentLayerRef = useRef<L.LayerGroup | null>(null)
+  const vehicleLayerRef = useRef<L.LayerGroup | null>(null)
+  const userLayerRef = useRef<L.LayerGroup | null>(null)
+  const onSelectRef = useRef(onSelectIncident)
+  const [mapReady, setMapReady] = useState(false)
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
-    mapRef.current = L.map(containerRef.current, {
-      center: [52.3, 5.3],
-      zoom: 7,
-    })
+    onSelectRef.current = onSelectIncident
+  })
+
+  // Initialize map once per mount
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const map = L.map(container, { center: [52.3, 5.3], zoom: 7 })
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
-    }).addTo(mapRef.current)
+    }).addTo(map)
+
+    incidentLayerRef.current = L.layerGroup().addTo(map)
+    vehicleLayerRef.current = L.layerGroup().addTo(map)
+    userLayerRef.current = L.layerGroup().addTo(map)
+    mapRef.current = map
+
+    // invalidateSize fixes rendering when container was hidden during init
+    setTimeout(() => map.invalidateSize(), 100)
+    setMapReady(true)
+
     return () => {
-      mapRef.current?.remove()
+      setMapReady(false)
+      map.remove()
       mapRef.current = null
+      incidentLayerRef.current = null
+      vehicleLayerRef.current = null
+      userLayerRef.current = null
     }
   }, [])
 
+  // Incident markers — run when map is ready OR incidents change
   useEffect(() => {
-    if (!mapRef.current) return
-    markersRef.current.forEach((m) => m.remove())
-    markersRef.current = []
+    const layer = incidentLayerRef.current
+    if (!mapReady || !layer) return
+    layer.clearLayers()
 
     incidents
       .filter((i) => i.lat !== null && i.lng !== null)
       .forEach((incident) => {
-        const marker = L.marker([incident.lat!, incident.lng!], {
-          icon: makeIcon(incident.category),
+        const timeStr = new Date(incident.firstSeenAt).toLocaleTimeString('nl-NL', {
+          hour: '2-digit',
+          minute: '2-digit',
         })
-        marker.bindPopup(`
-          <div style="min-width:180px">
-            <strong style="font-size:0.9rem">${incident.title}</strong>
-            <div style="color:#718096;font-size:0.8rem;margin:4px 0">${incident.city}</div>
-            <div style="color:#a0aec0;font-size:0.75rem;margin-bottom:8px">${new Date(incident.firstSeenAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</div>
-            <a href="/incident/${incident.id}" style="display:inline-block;padding:5px 12px;background:#e53e3e;color:#fff;border-radius:6px;text-decoration:none;font-size:0.8rem;font-weight:600">Detail →</a>
-          </div>
-        `)
-        marker.on('click', () => onSelectIncident?.(incident.id))
-        marker.addTo(mapRef.current!)
-        markersRef.current.push(marker)
+        const sourceBadge =
+          incident.sourceCount > 1
+            ? `<span style="font-size:0.7rem;background:#faf5ff;color:#805ad5;border-radius:9999px;padding:2px 7px;margin-left:4px">${incident.sourceCount} bronnen</span>`
+            : ''
+        L.marker([incident.lat!, incident.lng!], { icon: incidentIcon(incident.category) })
+          .bindPopup(
+            `<div style="min-width:185px">
+              <strong style="font-size:0.9rem">${incident.title}</strong>${sourceBadge}
+              <div style="color:#718096;font-size:0.8rem;margin:4px 0">${incident.city}</div>
+              <div style="color:#a0aec0;font-size:0.73rem;margin-bottom:8px">${timeStr}</div>
+              <a href="/incident/${incident.id}" style="display:inline-block;padding:5px 12px;background:#e53e3e;color:#fff;border-radius:6px;text-decoration:none;font-size:0.8rem;font-weight:600">Detail →</a>
+            </div>`
+          )
+          .on('click', () => onSelectRef.current?.(incident.id))
+          .addTo(layer)
       })
-  }, [incidents, onSelectIncident])
+  }, [incidents, mapReady])
 
+  // Vehicle markers — run when map is ready OR vehicles change
   useEffect(() => {
-    if (!mapRef.current || !userCoords) return
+    const layer = vehicleLayerRef.current
+    if (!mapReady || !layer) return
+    layer.clearLayers()
+
+    vehicles.forEach((vehicle) => {
+      const timeStr = new Date(vehicle.lastSeenAt).toLocaleTimeString('nl-NL', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      const incidentLink = vehicle.linkedIncidentId
+        ? `<a href="/incident/${vehicle.linkedIncidentId}" style="display:block;margin-top:6px;padding:4px 10px;background:#1a365d;color:#fff;border-radius:5px;text-decoration:none;font-size:0.75rem;text-align:center">Gekoppeld incident →</a>`
+        : ''
+      L.marker([vehicle.lat, vehicle.lng], { icon: vehicleIcon(vehicle.type) })
+        .bindPopup(
+          `<div style="min-width:160px">
+            <strong style="font-size:0.85rem">${vehicle.callSign}</strong>
+            <div style="color:#718096;font-size:0.78rem;margin:3px 0">${vehicle.type} · ${vehicle.speed} km/h</div>
+            <div style="color:#a0aec0;font-size:0.72rem">Flitsmeister · ${timeStr}</div>
+            ${incidentLink}
+          </div>`
+        )
+        .addTo(layer)
+    })
+  }, [vehicles, mapReady])
+
+  // User location marker
+  useEffect(() => {
+    const layer = userLayerRef.current
+    if (!mapReady || !layer) return
+    layer.clearLayers()
+    if (!userCoords) return
+
     L.circleMarker([userCoords.lat, userCoords.lng], {
-      radius: 8,
+      radius: 9,
       fillColor: '#3182ce',
       fillOpacity: 0.9,
       color: '#fff',
       weight: 2,
     })
       .bindPopup('Uw locatie')
-      .addTo(mapRef.current)
-    mapRef.current.setView([userCoords.lat, userCoords.lng], 12)
-  }, [userCoords])
+      .addTo(layer)
+
+    mapRef.current?.setView([userCoords.lat, userCoords.lng], 12)
+  }, [userCoords, mapReady])
 
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height, minHeight: '300px' }}
+      style={{ width: '100%', height, minHeight: '300px', flex: 1 }}
     />
   )
 }
