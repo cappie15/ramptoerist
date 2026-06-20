@@ -18,20 +18,12 @@ export class GenericRssConnector extends BaseConnector {
   }
 
   async fetch(): Promise<RawSourceMessage[]> {
-    try {
-      const res = await fetch(this.config.url, {
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'Ramptoerist/1.0' },
-      })
-      if (!res.ok) {
-        console.warn(`[${this.name}] HTTP ${res.status}`)
-        return []
-      }
-      return this.parse(await res.text())
-    } catch (err) {
-      console.warn(`[${this.name}] ${err instanceof Error ? err.message : err}`)
-      return []
-    }
+    const res = await fetch(this.config.url, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'Ramptoerist/1.0' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return this.parse(await res.text())
   }
 
   private parse(xml: string): RawSourceMessage[] {
