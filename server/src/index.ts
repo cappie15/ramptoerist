@@ -6,6 +6,8 @@ import { vehicleRouter } from './routes/vehicles'
 import { MockConnector } from './connectors/MockConnector'
 import { normalizeMessage, normalizeText } from './normalizer'
 import { findOrCreateIncident } from './deduplicator'
+import { IngestionService } from './services/IngestionService'
+import { startScheduler, getSchedulerStatus } from './scheduler'
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
@@ -37,11 +39,15 @@ function mapIncident(row: Record<string, unknown>) {
 app.get('/api/search', (req, res) => {
   const q = (req.query.q as string | undefined) ?? ''
   if (!q.trim()) {
-    const rows = db.prepare('SELECT * FROM incidents ORDER BY first_seen_at DESC LIMIT 100').all() as Record<string, unknown>[]
+    const rows = db
+      .prepare('SELECT * FROM incidents ORDER BY first_seen_at DESC LIMIT 100')
+      .all() as Record<string, unknown>[]
     return res.json({ incidents: rows.map(mapIncident), total: rows.length })
   }
   const words = normalizeText(q).split(' ').filter(Boolean)
-  const allIncidents = db.prepare('SELECT * FROM incidents ORDER BY first_seen_at DESC').all() as Record<string, unknown>[]
+  const allIncidents = db
+    .prepare('SELECT * FROM incidents ORDER BY first_seen_at DESC')
+    .all() as Record<string, unknown>[]
   const matched = allIncidents.filter((row) => {
     const searchable = normalizeText(
       [row.title, row.summary, row.city, row.street, row.location_text, row.category].join(' ')
@@ -55,36 +61,80 @@ app.use('/api/incidents', incidentRouter)
 app.use('/api/vehicles', vehicleRouter)
 
 app.get('/api/sources', (_req, res) => {
-  res.json([
-    { name: 'p2000.net', enabled: true, type: 'mock' },
-    { name: 'p2000m.nl', enabled: true, type: 'mock' },
-    { name: 'alarmeringen.nl', enabled: true, type: 'mock' },
-    { name: 'dashpatch', enabled: false, type: 'mock' },
-    { name: '1120.nl', enabled: false, type: 'mock' },
-  ])
+  const schedulerSt = getSchedulerStatus()
+  const realData = schedulerSt.realData
+
+  const sources = realData
+    ? schedulerSt.sources.map((s) => ({
+        name: s.name,
+        enabled: true,
+        type: 'rss',
+        lastFetchedAt: s.lastFetchedAt,
+        lastCount: s.lastCount,
+      }))
+    : [
+        { name: 'p2000-online.net', enabled: false, type: 'rss', lastFetchedAt: null, lastCount: 0 },
+        { name: 'alarmeringen.nl', enabled: false, type: 'rss', lastFetchedAt: null, lastCount: 0 },
+        { name: 'mock', enabled: true, type: 'mock', lastFetchedAt: null, lastCount: 0 },
+      ]
+
+  res.json(sources)
 })
+
+app.get('/api/ingest/status', (_req, res) => {
+  const s = getSchedulerStatus()
+  const incidentCount = (
+    db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }
+  ).c
+  const sourceCount = (
+    db.prepare('SELECT COUNT(*) as c FROM incident_sources').get() as { c: number }
+  ).c
+  res.json({
+    ...s,
+    incidentCount,
+    sourceMessageCount: sourceCount,
+  })
+})
+
+// Ingest mock data on demand (useful during development / seeding)
+const ingestionService = new IngestionService()
 
 app.post('/api/ingest/mock', async (_req, res) => {
   const connector = new MockConnector()
   const messages = await connector.fetch()
-  let created = 0
-  let merged = 0
+  const result = await ingestionService.ingest(messages)
+  const total = (db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }).c
+  res.json({ ...result, total })
+})
 
-  const countBefore = (db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }).c
+// Trigger a single real-data fetch cycle on demand (handy for testing)
+app.post('/api/ingest/now', async (_req, res) => {
+  if (process.env.REAL_DATA !== 'true') {
+    return res.status(400).json({ error: 'Set REAL_DATA=true to use real connectors' })
+  }
+  const { P2000RssConnector } = await import('./connectors/P2000RssConnector')
+  const { AlarmeringenConnector } = await import('./connectors/AlarmeringenConnector')
 
-  for (const raw of messages) {
-    const normalized = normalizeMessage(raw)
-    const prevCount = (db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }).c
-    findOrCreateIncident(normalized)
-    const afterCount = (db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }).c
-    if (afterCount > prevCount) created++
-    else merged++
+  const connectors = [new P2000RssConnector(), new AlarmeringenConnector()]
+  const results: Record<string, unknown> = {}
+
+  for (const c of connectors) {
+    try {
+      const messages = await c.fetch()
+      const result = await ingestionService.ingest(messages)
+      results[c.name] = { fetched: messages.length, ...result }
+    } catch (err) {
+      results[c.name] = { error: err instanceof Error ? err.message : String(err) }
+    }
   }
 
   const total = (db.prepare('SELECT COUNT(*) as c FROM incidents').get() as { c: number }).c
-  res.json({ created, merged, total, countBefore })
+  res.json({ results, total })
 })
 
+startScheduler()
+
 app.listen(PORT, () => {
-  console.log(`[Server] Ramptoerist API running on http://localhost:${PORT}`)
+  const mode = process.env.REAL_DATA === 'true' ? 'REAL DATA' : 'mock data'
+  console.log(`[Server] Ramptoerist API running on http://localhost:${PORT} [${mode}]`)
 })
