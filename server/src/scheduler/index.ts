@@ -1,9 +1,20 @@
 import { IngestionService } from '../services/IngestionService'
 import { GenericRssConnector } from '../connectors/GenericRssConnector'
 import { RSS_SOURCES } from '../connectors/sources.config'
-import type { BaseConnector } from '../connectors/BaseConnector'
+import type { BaseConnector, ConnectorHealth } from '../connectors/BaseConnector'
 
 const POLL_INTERVAL_MS = 30_000
+
+export interface SourceStatus {
+  name: string
+  url: string
+  health: ConnectorHealth
+  lastFetchedAt: string | null
+  lastCount: number
+  consecutiveErrors: number
+  backoffUntil: string | null
+  lastError: string | null
+}
 
 export interface SchedulerStatus {
   running: boolean
@@ -12,7 +23,7 @@ export interface SchedulerStatus {
   nextRun: string | null
   totalCreated: number
   totalMerged: number
-  sources: Array<{ name: string; url: string; lastFetchedAt: string | null; lastCount: number }>
+  sources: SourceStatus[]
 }
 
 const status: SchedulerStatus = {
@@ -29,7 +40,16 @@ let ingestionService: IngestionService | null = null
 let connectors: BaseConnector[] = []
 
 export function getSchedulerStatus(): SchedulerStatus {
-  return { ...status }
+  // Sync live connector health into the status snapshot
+  connectors.forEach((c, i) => {
+    const s = status.sources[i]
+    if (s) {
+      s.health = c.health
+      s.backoffUntil = c.backoffUntilIso
+      s.lastError = c.lastError
+    }
+  })
+  return { ...status, sources: status.sources.map((s) => ({ ...s })) }
 }
 
 export function startScheduler(): void {
@@ -51,8 +71,12 @@ export function startScheduler(): void {
   status.sources = enabledSources.map((s) => ({
     name: s.name,
     url: s.url,
+    health: 'ok' as ConnectorHealth,
     lastFetchedAt: null,
     lastCount: 0,
+    consecutiveErrors: 0,
+    backoffUntil: null,
+    lastError: null,
   }))
 
   console.log(`[Scheduler] Real mode — polling ${connectors.length} connectors every ${POLL_INTERVAL_MS / 1000}s`)
@@ -62,7 +86,6 @@ export function startScheduler(): void {
   const interval = setInterval(runCycle, POLL_INTERVAL_MS)
   status.nextRun = new Date(Date.now() + POLL_INTERVAL_MS).toISOString()
 
-  // Clean up on process exit
   process.on('SIGTERM', () => clearInterval(interval))
   process.on('SIGINT', () => clearInterval(interval))
 }
@@ -75,12 +98,22 @@ async function runCycle(): Promise<void> {
   for (let i = 0; i < connectors.length; i++) {
     const connector = connectors[i]
     if (!connector.enabled) continue
+
+    // Circuit breaker: skip this connector while it is backing off
+    if (connector.isInBackoff()) continue
+
     try {
       const messages = await connector.fetch()
-      const sourceStatus = status.sources[i]
-      if (sourceStatus) {
-        sourceStatus.lastFetchedAt = new Date().toISOString()
-        sourceStatus.lastCount = messages.length
+      connector.recordSuccess()
+
+      const s = status.sources[i]
+      if (s) {
+        s.lastFetchedAt = new Date().toISOString()
+        s.lastCount = messages.length
+        s.health = 'ok'
+        s.consecutiveErrors = 0
+        s.backoffUntil = null
+        s.lastError = null
       }
 
       if (messages.length === 0) continue
@@ -95,7 +128,21 @@ async function runCycle(): Promise<void> {
         )
       }
     } catch (err) {
-      console.warn(`[Scheduler] Error from ${connector.name}:`, err instanceof Error ? err.message : err)
+      const message = err instanceof Error ? err.message : String(err)
+      connector.recordError(message)
+
+      const s = status.sources[i]
+      if (s) {
+        s.consecutiveErrors++
+        s.health = connector.health
+        s.backoffUntil = connector.backoffUntilIso
+        s.lastError = message
+      }
+
+      console.warn(
+        `[Scheduler] ${connector.name} fout #${s?.consecutiveErrors}: ${message}` +
+          ` — volgende poging om ${connector.backoffUntilIso}`
+      )
     }
   }
 
