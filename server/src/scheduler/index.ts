@@ -1,6 +1,6 @@
 import { IngestionService } from '../services/IngestionService'
-import { P2000RssConnector } from '../connectors/P2000RssConnector'
-import { AlarmeringenConnector } from '../connectors/AlarmeringenConnector'
+import { GenericRssConnector } from '../connectors/GenericRssConnector'
+import { RSS_SOURCES } from '../connectors/sources.config'
 import type { BaseConnector } from '../connectors/BaseConnector'
 
 const POLL_INTERVAL_MS = 30_000
@@ -37,19 +37,20 @@ export function startScheduler(): void {
   status.realData = realData
 
   ingestionService = new IngestionService()
-  connectors = realData
-    ? [new P2000RssConnector(), new AlarmeringenConnector()]
-    : []
+
+  const enabledSources = RSS_SOURCES.filter((s) => s.enabled)
+  connectors = realData ? enabledSources.map((s) => new GenericRssConnector(s)) : []
 
   if (!realData) {
     console.log('[Scheduler] Mock mode — set REAL_DATA=true for live P2000 feeds')
+    console.log(`[Scheduler] ${RSS_SOURCES.length} bronnen geconfigureerd, ${enabledSources.length} actief`)
     status.running = true
     return
   }
 
-  status.sources = connectors.map((c) => ({
-    name: c.name,
-    url: (c as unknown as { config: { url: string } }).config.url,
+  status.sources = enabledSources.map((s) => ({
+    name: s.name,
+    url: s.url,
     lastFetchedAt: null,
     lastCount: 0,
   }))
