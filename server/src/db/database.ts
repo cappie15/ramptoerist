@@ -2,7 +2,9 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 
-const DB_DIR = path.join(__dirname, '../../data')
+const DB_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(__dirname, '../../data')
 const DB_PATH = path.join(DB_DIR, 'ramptoerist.db')
 
 if (!fs.existsSync(DB_DIR)) {
