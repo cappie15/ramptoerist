@@ -1,5 +1,4 @@
-import type { Incident } from '../types'
-import type { GeoCoords } from '../types'
+import type { Incident, GeoCoords } from '../types'
 import { IncidentCard } from './IncidentCard'
 
 interface Props {
@@ -8,9 +7,19 @@ interface Props {
   error: string | null
   userCoords?: GeoCoords | null
   emptyMessage?: string
+  onSelect?: (id: string) => void
+  selectedId?: string | null
 }
 
-export function IncidentList({ incidents, loading, error, userCoords, emptyMessage }: Props) {
+export function IncidentList({
+  incidents,
+  loading,
+  error,
+  userCoords,
+  emptyMessage,
+  onSelect,
+  selectedId,
+}: Props) {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
@@ -44,7 +53,13 @@ export function IncidentList({ incidents, loading, error, userCoords, emptyMessa
   return (
     <div style={{ padding: '8px 12px' }}>
       {incidents.map((incident) => (
-        <IncidentCard key={incident.id} incident={incident} userCoords={userCoords} />
+        <IncidentCard
+          key={incident.id}
+          incident={incident}
+          userCoords={userCoords}
+          onSelect={onSelect}
+          selected={selectedId === incident.id}
+        />
       ))}
     </div>
   )

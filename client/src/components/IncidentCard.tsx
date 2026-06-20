@@ -1,47 +1,51 @@
 import { useNavigate } from 'react-router-dom'
-import type { Incident } from '../types'
+import type { Incident, GeoCoords } from '../types'
 import { CategoryIcon } from './CategoryIcon'
 import { DistanceBadge } from './DistanceBadge'
 import { timeAgo } from '../utils/formatters'
-import type { GeoCoords } from '../types'
 import { haversineDistance } from '../utils/distance'
 
 interface Props {
   incident: Incident
   userCoords?: GeoCoords | null
+  onSelect?: (id: string) => void
+  selected?: boolean
 }
 
-export function IncidentCard({ incident, userCoords }: Props) {
+export function IncidentCard({ incident, userCoords, onSelect, selected }: Props) {
   const navigate = useNavigate()
   const distanceKm =
     userCoords && incident.lat && incident.lng
       ? haversineDistance(userCoords, { lat: incident.lat, lng: incident.lng })
       : null
 
+  const handleClick = () => (onSelect ? onSelect(incident.id) : navigate(`/incident/${incident.id}`))
+
   return (
     <div
-      onClick={() => navigate(`/incident/${incident.id}`)}
+      onClick={handleClick}
       style={{
         display: 'flex',
         gap: '12px',
         alignItems: 'flex-start',
-        background: '#fff',
+        background: selected ? '#ebf8ff' : '#fff',
         borderRadius: '12px',
         padding: '14px 16px',
         marginBottom: '8px',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        boxShadow: selected ? '0 0 0 2px #3182ce' : '0 1px 4px rgba(0,0,0,0.08)',
         cursor: 'pointer',
-        transition: 'box-shadow 0.15s',
+        transition: 'box-shadow 0.15s, background 0.15s',
         WebkitTapHighlightColor: 'transparent',
+        borderLeft: selected ? '3px solid #e53e3e' : '3px solid transparent',
       }}
-      onMouseEnter={(e) =>
-        ((e.currentTarget as HTMLDivElement).style.boxShadow =
-          '0 3px 10px rgba(0,0,0,0.14)')
-      }
-      onMouseLeave={(e) =>
-        ((e.currentTarget as HTMLDivElement).style.boxShadow =
-          '0 1px 4px rgba(0,0,0,0.08)')
-      }
+      onMouseEnter={(e) => {
+        if (!selected)
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 3px 10px rgba(0,0,0,0.14)'
+      }}
+      onMouseLeave={(e) => {
+        if (!selected)
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'
+      }}
     >
       <div style={{ paddingTop: '2px' }}>
         <CategoryIcon category={incident.category} size="md" />
@@ -72,14 +76,7 @@ export function IncidentCard({ incident, userCoords }: Props) {
           {incident.city}
           {incident.street ? ` · ${incident.street}` : ''}
         </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: '6px',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.75rem', color: '#a0aec0' }}>
             {timeAgo(incident.firstSeenAt)}
           </span>
