@@ -1,129 +1,139 @@
-# Ramptoerist - P2000 Incidenten Viewer
+# Ramptoerist 🚨
 
-Realtime viewer voor P2000/112-meldingen in Nederland. Mobile-first responsive web app.
+Realtime P2000 incidentenviewer voor Nederland. Toont brandweer-, ambulance- en politiemeldingen op een kaart met split-screen layout voor tablet en desktop.
+
+## Features
+
+- **Realtime P2000 data** — pollt p2000-online.net en alarmeringen.nl elke 30 seconden
+- **Kaart** — Leaflet + OpenStreetMap met emoji-markers per categorie en hulpdienstvoertuigen
+- **Dichtbij** — incidenten gesorteerd op afstand tot jouw locatie (≤ 50 km, instelbaar)
+- **Deduplicatie** — Jaccard-similarity samenvoegt dubbele meldingen van meerdere bronnen
+- **Geocoding** — Nominatim (OSM) vult ontbrekende coördinaten in
+- **Responsive** — mobiel (tabs), tablet (split overlay), desktop (drie kolommen)
+- **Docker-ready** — multi-stage build, één container serveert frontend + API
 
 ## Snel starten
 
 ### Vereisten
-- Node.js 18 of hoger
-- npm 8 of hoger
 
-### Installatie
+- Node.js 20+
+- npm 10+
+
+### Lokaal ontwikkelen
 
 ```bash
 npm install
+npm run seed        # vul de DB met 29 mock-incidenten
+npm run dev         # start server :3001 + Vite :5173
 ```
 
-### Database vullen met mockdata
+Live P2000 data inschakelen:
 
 ```bash
-npm run seed
+REAL_DATA=true npm run dev
 ```
 
-### Ontwikkelserver starten
+### Productie met Docker
 
 ```bash
-npm run dev
+git clone https://github.com/cappie15/ramptoerist.git
+cd ramptoerist
+
+# Optioneel: domein instellen voor CORS
+echo "ALLOWED_ORIGIN=https://jouwdomein.nl" > .env
+
+docker compose up -d
 ```
 
-Opent:
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3001
-
-### Alleen backend
-
-```bash
-npm run dev:server
-```
-
-### Alleen frontend
-
-```bash
-npm run dev:client
-```
+App draait op poort **3000**. Zet nginx met Let's Encrypt ervóór voor HTTPS.
 
 ## Beschikbare scripts
 
 | Script | Omschrijving |
-|--------|--------------|
-| `npm install` | Installeer alle dependencies |
-| `npm run dev` | Start frontend én backend tegelijk |
-| `npm run dev:client` | Start alleen de frontend (Vite) |
-| `npm run dev:server` | Start alleen de backend (Express) |
-| `npm run seed` | Vul de database met mockdata |
-| `npm run test` | Run unit tests |
-| `npm run build` | Build frontend én backend voor productie |
+|---|---|
+| `npm install` | Alle dependencies installeren |
+| `npm run dev` | Frontend (Vite :5173) + backend (:3001) tegelijk |
+| `npm run seed` | DB vullen met 29 mock-incidenten |
+| `npm run build` | Frontend + backend builden voor productie |
+| `npm run test` | Unit tests (deduplicatie, geocoder, normalizer) |
 
-## API Endpoints
+## Omgevingsvariabelen
 
-| Endpoint | Methode | Omschrijving |
-|----------|---------|--------------|
-| `/api/incidents` | GET | Laatste 100 incidenten |
-| `/api/incidents/:id` | GET | Incident detail met bronnen |
-| `/api/search?q=` | GET | Vrij zoeken |
-| `/api/ingest/mock` | POST | Importeer mockdata opnieuw |
-| `/api/sources` | GET | Geconfigureerde bronnen |
+| Variabele | Standaard | Omschrijving |
+|---|---|---|
+| `REAL_DATA` | `false` | `true` = live RSS-feeds, `false` = mock data |
+| `PORT` | `3001` | Serverpoort |
+| `DATA_DIR` | `server/data` | Map voor de SQLite-database |
+| `ALLOWED_ORIGIN` | `*` | CORS beperken in productie |
+| `NODE_ENV` | — | `production` = static serving + rate limiting aan |
+
+Zie `.env.example` voor een sjabloon.
+
+## API
+
+| Methode | Pad | Omschrijving |
+|---|---|---|
+| `GET` | `/api/incidents` | Laatste 100 incidenten |
+| `GET` | `/api/incidents/:id` | Incidentdetail + bronmeldingen |
+| `GET` | `/api/search?q=` | Zoeken op tekst |
+| `GET` | `/api/vehicles` | Actieve hulpdienstvoertuigen |
+| `GET` | `/api/sources` | Status van databronnen |
+| `GET` | `/api/ingest/status` | Scheduler-status en tellers |
 
 ## Architectuur
 
 ```
-ramptoerist/
-├── client/          # React + Vite frontend
-│   └── src/
-│       ├── components/   # UI componenten
-│       ├── pages/        # Route pagina's
-│       ├── hooks/        # React hooks
-│       ├── utils/        # Hulpfuncties (distance, formatters)
-│       └── types/        # TypeScript types
-└── server/          # Node.js + Express backend
-    └── src/
-        ├── connectors/   # Databronnen (nu: MockConnector)
-        ├── normalizer/   # Zet bronmeldingen om naar intern formaat
-        ├── deduplicator/ # Samenvoegen van dubbele meldingen
-        ├── geocoder/     # Coördinaten opzoeken (nu: MockGeocoder)
-        ├── routes/       # API routes
-        └── db/           # SQLite database + seed
+client/                    React 18 + TypeScript + Vite
+  src/
+    components/            IncidentCard, IncidentMap, IncidentDetail …
+    hooks/                 useIncidents, useVehicles, useGeolocation, useBreakpoint
+    layouts/               SplitLayout (tablet/desktop split-screen)
+    pages/                 RecentPage, NearbyPage, MapPage, IncidentDetailPage
+
+server/                    Node.js + Express + SQLite (better-sqlite3)
+  src/
+    connectors/            P2000RssConnector, AlarmeringenConnector, MockConnector
+    deduplicator/          Jaccard-similarity, 30-minuten tijdvenster
+    geocoder/              MockGeocoder + NominatimGeocoder (rate-limited, gecached)
+    normalizer/            Categorie/prioriteit-inferentie uit P2000-berichten
+    scheduler/             Pollt connectors elke 30s (REAL_DATA=true)
+    services/              IngestionService (dedup over herstarts heen)
+    routes/                incidents, vehicles
+    db/                    SQLite schema + seed
 ```
 
-## Echte scrapers toevoegen
+## Databronnen
 
-Maak een nieuwe klasse die `BaseConnector` uitbreidt in `server/src/connectors/`:
+| Bron | Type | Omschrijving |
+|---|---|---|
+| p2000-online.net | RSS | Nationale P2000-feed |
+| alarmeringen.nl | RSS | Tweede bron voor deduplicatie |
+| Flitsmeister | Mock | Deterministisch gegenereerde voertuigposities |
+
+## Nieuwe databron toevoegen
+
+Maak een klasse die `BaseConnector` uitbreidt in `server/src/connectors/`:
 
 ```typescript
-import { BaseConnector } from './BaseConnector'
-import type { RawSourceMessage } from '../types'
-
-export class P2000NetConnector extends BaseConnector {
+export class MijnConnector extends BaseConnector {
   constructor() {
-    super({ name: 'p2000.net', url: 'https://p2000.net', enabled: true, pollIntervalMs: 30000 })
+    super({ name: 'mijnbron.nl', url: 'https://...', enabled: true, pollIntervalMs: 30_000 })
   }
   async fetch(): Promise<RawSourceMessage[]> {
-    // Echte scraping logica hier
+    // ophalen + omzetten naar RawSourceMessage[]
   }
 }
 ```
 
-## Geocoder uitbreiden met PDOK
+Voeg de connector toe in `server/src/scheduler/index.ts`.
 
-De `MockGeocoder` implementeert de `Geocoder` interface. Vervang hem met:
+## Tech stack
 
-```typescript
-export class PdokGeocoder implements Geocoder {
-  async geocode(locationText: string): Promise<GeocoderResult | null> {
-    const url = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q=${encodeURIComponent(locationText)}`
-    // ...
-  }
-}
-```
+- **Frontend** — React 18, TypeScript, Vite, React Router v6, Leaflet/OpenStreetMap
+- **Backend** — Node.js, Express, better-sqlite3
+- **Beveiliging** — helmet (CSP), express-rate-limit, CORS-restrictie
+- **Infra** — Docker multi-stage (node:20-alpine), docker compose, tini
 
-## Tests
+## Licentie
 
-```bash
-npm run test
-```
-
-Tests dekken:
-- Deduplicatie en tekstsimilariteit
-- Haversine afstandsberekening
-- Normalisatie van bronmeldingen
-- Zoekfunctionaliteit
+MIT
