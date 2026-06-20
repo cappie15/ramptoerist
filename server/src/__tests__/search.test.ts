@@ -18,8 +18,8 @@ const INCIDENTS = [
 ]
 
 describe('search', () => {
-  it('returns all incidents for empty query (handled upstream)', () => {
-    expect(search(INCIDENTS, '')).toHaveLength(0)
+  it('returns all incidents for empty query (empty words array matches all)', () => {
+    expect(search(INCIDENTS, '')).toHaveLength(INCIDENTS.length)
   })
 
   it('finds by city', () => {

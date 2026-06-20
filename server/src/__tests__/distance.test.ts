@@ -28,12 +28,12 @@ describe('haversineDistance', () => {
     expect(dist).toBeLessThan(60)
   })
 
-  it('Amsterdam to Maastricht is approx 210 km', () => {
+  it('Amsterdam to Maastricht is approx 177 km', () => {
     const amsterdam = { lat: 52.3676, lng: 4.9041 }
     const maastricht = { lat: 50.8514, lng: 5.6909 }
     const dist = haversineDistance(amsterdam, maastricht)
-    expect(dist).toBeGreaterThan(200)
-    expect(dist).toBeLessThan(220)
+    expect(dist).toBeGreaterThan(170)
+    expect(dist).toBeLessThan(185)
   })
 
   it('is commutative', () => {

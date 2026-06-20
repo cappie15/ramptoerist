@@ -1,6 +1,6 @@
 import { db } from '../db/database'
 import { v4 as uuid } from 'uuid'
-import type { NormalizedMessage, Incident } from '../types'
+import type { NormalizedMessage } from '../types'
 import { normalizeText } from '../normalizer'
 
 const DEDUP_WINDOW_MS = 30 * 60 * 1000
@@ -25,10 +25,10 @@ export function findOrCreateIncident(msg: NormalizedMessage): string {
        WHERE city = ? AND category = ? AND first_seen_at >= ?
        ORDER BY first_seen_at DESC LIMIT 10`
     )
-    .all(msg.city, msg.category, windowStart) as Incident[]
+    .all(msg.city, msg.category, windowStart) as Record<string, unknown>[]
 
   for (const candidate of candidates) {
-    const sim = textSimilarity(candidate.locationText, msg.locationText)
+    const sim = textSimilarity(candidate.location_text as string, msg.locationText)
     if (sim >= 0.4) {
       db.prepare(
         `UPDATE incidents SET
@@ -36,15 +36,15 @@ export function findOrCreateIncident(msg: NormalizedMessage): string {
           source_count = source_count + 1,
           updated_at = datetime('now')
          WHERE id = ?`
-      ).run(msg.receivedAt.toISOString(), candidate.id)
+      ).run(msg.receivedAt.toISOString(), candidate.id as string)
 
       db.prepare(
         `INSERT OR IGNORE INTO incident_sources
          (id, incident_id, source_name, source_url, raw_message, received_at)
          VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(uuid(), candidate.id, msg.sourceName, msg.sourceUrl, msg.message, msg.receivedAt.toISOString())
+      ).run(uuid(), candidate.id as string, msg.sourceName, msg.sourceUrl, msg.message, msg.receivedAt.toISOString())
 
-      return candidate.id
+      return candidate.id as string
     }
   }
 
