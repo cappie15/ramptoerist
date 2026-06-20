@@ -76,10 +76,31 @@ export function IncidentMap({
     if (!container) return
 
     const map = L.map(container, { center: [52.3, 5.3], zoom: 7 })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map)
+
+    // Show overlay when tiles fail to load (e.g. no internet access)
+    let errorCount = 0
+    tileLayer.on('tileerror', () => {
+      errorCount++
+      if (errorCount === 4) {
+        const el = document.createElement('div')
+        el.id = 'tile-error-overlay'
+        el.style.cssText =
+          'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+          'background:rgba(247,250,252,0.92);z-index:500;pointer-events:none;'
+        el.innerHTML =
+          '<div style="text-align:center;padding:20px;color:#4a5568">' +
+          '<div style="font-size:2rem;margin-bottom:8px">🗺️</div>' +
+          '<strong>Kaartlaag niet beschikbaar</strong>' +
+          '<p style="margin:6px 0 0;font-size:0.85rem">Controleer de internetverbinding.<br>Incidentmarkers zijn wel zichtbaar.</p>' +
+          '</div>'
+        container.style.position = 'relative'
+        container.appendChild(el)
+      }
+    })
 
     incidentLayerRef.current = L.layerGroup().addTo(map)
     vehicleLayerRef.current = L.layerGroup().addTo(map)
