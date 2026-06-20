@@ -21,7 +21,7 @@ export const RSS_SOURCES: RssSourceConfig[] = [
     locationField: 'title',
   },
 
-  // ── Enabled — schakel uit met enabled: false als een feed niet reageert ──────
+  // ── Enabled ──────────────────────────────────────────────────────────────────
   {
     name: 'p2000.nl',
     url: 'https://www.p2000.nl/?pf=rss',
@@ -37,29 +37,8 @@ export const RSS_SOURCES: RssSourceConfig[] = [
     locationField: 'title',
   },
   {
-    name: 'calamiteiten.net',
-    url: 'https://www.calamiteiten.net/rss/',
-    enabled: true,
-    pollIntervalMs: 30_000,
-    locationField: 'description',
-  },
-  {
-    name: 'meldpunt112.nl',
-    url: 'https://www.meldpunt112.nl/rss/',
-    enabled: true,
-    pollIntervalMs: 30_000,
-    locationField: 'title',
-  },
-  {
     name: 'p2000m.nl',
     url: 'https://www.p2000m.nl/feed/',
-    enabled: true,
-    pollIntervalMs: 30_000,
-    locationField: 'title',
-  },
-  {
-    name: 'p2000-live.nl',
-    url: 'https://www.p2000-live.nl/rss/',
     enabled: true,
     pollIntervalMs: 30_000,
     locationField: 'title',
@@ -72,9 +51,39 @@ export const RSS_SOURCES: RssSourceConfig[] = [
     locationField: 'title',
   },
   {
+    name: 'zwaailicht.nu',
+    url: 'https://zwaailicht.nu/feed/meldingen.xml',
+    enabled: true,
+    pollIntervalMs: 30_000,
+    locationField: 'title',
+  },
+
+  // ── Uitgeschakeld — niet bereikbaar (ECONNREFUSED / site offline) ─────────
+  {
+    name: 'calamiteiten.net',
+    url: 'https://www.calamiteiten.net/rss/',
+    enabled: false,
+    pollIntervalMs: 30_000,
+    locationField: 'description',
+  },
+  {
+    name: 'meldpunt112.nl',
+    url: 'https://www.meldpunt112.nl/rss/',
+    enabled: false,
+    pollIntervalMs: 30_000,
+    locationField: 'title',
+  },
+  {
+    name: 'p2000-live.nl',
+    url: 'https://www.p2000-live.nl/rss/',
+    enabled: false,
+    pollIntervalMs: 30_000,
+    locationField: 'title',
+  },
+  {
     name: 'regio-alarm.nl',
     url: 'https://www.regio-alarm.nl/rss/',
-    enabled: true,
+    enabled: false,
     pollIntervalMs: 30_000,
     locationField: 'title',
   },
