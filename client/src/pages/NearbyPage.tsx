@@ -1,32 +1,38 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useIncidents } from '../hooks/useIncidents'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { IncidentList } from '../components/IncidentList'
+import { RadiusSlider } from '../components/RadiusSlider'
+import { TimeFilter } from '../components/TimeFilter'
 import { haversineDistance } from '../utils/distance'
+import { filterByTime, type TimeRange } from '../utils/filters'
 
 export function NearbyPage() {
   const { coords, loading: geoLoading, error: geoError, request } = useGeolocation()
   const { incidents, loading, error } = useIncidents()
+  const [radiusKm, setRadiusKm] = useState(12)
+  const [timeRange, setTimeRange] = useState<TimeRange>('2h')
 
   useEffect(() => {
     request()
   }, [request])
 
+  const timeFiltered = filterByTime(incidents, timeRange)
   const nearby = coords
-    ? incidents
+    ? timeFiltered
         .filter((i) => i.lat !== null && i.lng !== null)
         .map((i) => ({
           incident: i,
           dist: haversineDistance(coords, { lat: i.lat!, lng: i.lng! }),
         }))
-        .filter((x) => x.dist <= 50)
+        .filter((x) => x.dist <= radiusKm)
         .sort((a, b) => a.dist - b.dist)
         .map((x) => x.incident)
     : []
 
   if (geoLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+      <div style={{ textAlign: 'center', padding: '40px', color: 'var(--rt-text-muted)' }}>
         📍 Locatie ophalen…
       </div>
     )
@@ -38,9 +44,9 @@ export function NearbyPage() {
         style={{
           padding: '20px',
           margin: '16px',
-          background: '#fff5f5',
+          background: 'var(--rt-error-bg)',
           borderRadius: '12px',
-          color: '#e53e3e',
+          color: 'var(--rt-error-text)',
           lineHeight: 1.6,
         }}
       >
@@ -51,7 +57,7 @@ export function NearbyPage() {
           style={{
             marginTop: '12px',
             padding: '10px 20px',
-            background: '#e53e3e',
+            background: 'var(--rt-accent)',
             color: '#fff',
             border: 'none',
             borderRadius: '8px',
@@ -67,16 +73,18 @@ export function NearbyPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <RadiusSlider value={radiusKm} onChange={setRadiusKm} />
+      <TimeFilter value={timeRange} onChange={setTimeRange} />
       {coords && (
         <div
           style={{
             padding: '8px 16px',
-            background: '#ebf8ff',
+            background: 'var(--rt-info-bg)',
             fontSize: '0.8rem',
-            color: '#2b6cb0',
+            color: 'var(--rt-info-text)',
           }}
         >
-          📍 Incidenten binnen 50 km van uw locatie ({nearby.length} gevonden)
+          📍 {nearby.length} incidenten binnen {radiusKm} km
         </div>
       )}
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -85,7 +93,7 @@ export function NearbyPage() {
           loading={loading}
           error={error}
           userCoords={coords}
-          emptyMessage="Geen incidenten binnen 50 km van uw locatie"
+          emptyMessage={`Geen incidenten binnen ${radiusKm} km van uw locatie`}
         />
       </div>
     </div>
