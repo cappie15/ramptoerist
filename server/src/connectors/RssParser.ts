@@ -21,6 +21,8 @@ function extractTag(xml: string, tag: string): string {
 
 export function parseRssItems(xml: string): RssItem[] {
   const items: RssItem[] = []
+
+  // RSS 2.0: <item>
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi
   let match: RegExpExecArray | null
   while ((match = itemRegex.exec(xml)) !== null) {
@@ -33,6 +35,24 @@ export function parseRssItems(xml: string): RssItem[] {
       guid: extractTag(raw, 'guid'),
     })
   }
+
+  // Atom 1.0: <entry> — used by e.g. zwaailicht.nu
+  if (items.length === 0) {
+    const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi
+    while ((match = entryRegex.exec(xml)) !== null) {
+      const raw = match[1]
+      const linkMatch = /(<link[^>]+href=["']([^"']+)["'][^/]*\/>|<link[^>]*>([^<]+)<)/.exec(raw)
+      const link = linkMatch ? (linkMatch[2] ?? linkMatch[3] ?? '') : extractTag(raw, 'link')
+      items.push({
+        title: extractTag(raw, 'title'),
+        description: extractTag(raw, 'summary') || extractTag(raw, 'content'),
+        link,
+        pubDate: extractTag(raw, 'published') || extractTag(raw, 'updated'),
+        guid: extractTag(raw, 'id') || link,
+      })
+    }
+  }
+
   return items
 }
 
