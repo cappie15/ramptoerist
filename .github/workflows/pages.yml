@@ -3,6 +3,13 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'scripts/**'
+      - '.github/workflows/pages.yml'
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,11 +28,28 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch P2000 feeds
+        run: |
+          python3 scripts/fetch-feeds.py
+          echo "=== Feed result ==="
+          python3 -c "
+          import json
+          d = json.load(open('docs/data.json'))
+          print(f'fetchedAt : {d[\"fetchedAt\"]}')
+          print(f'groups ok : {d.get(\"groupsOk\",\"?\")} / {d.get(\"totalGroups\",\"?\")}')
+          print(f'items     : {len(d[\"items\"])}')
+          for it in d['items'][:3]:
+              print(f'  [{it[\"date\"][:16]}] {it[\"title\"][:70]}')
+          " || echo "(no items)"
+
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
       - id: deploy
         uses: actions/deploy-pages@v4
