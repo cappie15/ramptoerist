@@ -76,4 +76,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_incident_sources_incident_id ON incident_sources(incident_id);
 `)
 
+// Migrations
+const cols = (db.prepare("PRAGMA table_info(incidents)").all() as { name: string }[]).map(r => r.name)
+if (!cols.includes('image_url')) {
+  db.exec('ALTER TABLE incidents ADD COLUMN image_url TEXT')
+  console.log('[DB] Migrated: added image_url column')
+}
+
 console.log(`[DB] Database ready at ${DB_PATH}`)

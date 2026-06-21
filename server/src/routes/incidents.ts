@@ -20,6 +20,7 @@ function mapIncident(row: Record<string, unknown>): Incident {
     lng: row.lng as number | null,
     sourceCount: row.source_count as number,
     reportageUrl: row.reportage_url as string | null,
+    imageUrl: (row.image_url as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }

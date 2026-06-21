@@ -34,9 +34,10 @@ export function findOrCreateIncident(msg: NormalizedMessage): string {
         `UPDATE incidents SET
           last_seen_at = ?,
           source_count = source_count + 1,
+          image_url = COALESCE(image_url, ?),
           updated_at = datetime('now')
          WHERE id = ?`
-      ).run(msg.receivedAt.toISOString(), candidate.id as string)
+      ).run(msg.receivedAt.toISOString(), msg.imageUrl ?? null, candidate.id as string)
 
       db.prepare(
         `INSERT OR IGNORE INTO incident_sources
@@ -52,8 +53,8 @@ export function findOrCreateIncident(msg: NormalizedMessage): string {
   const meta = msg.metadata as Record<string, unknown>
   db.prepare(
     `INSERT INTO incidents
-     (id, title, summary, category, priority, first_seen_at, last_seen_at, location_text, city, street, lat, lng, source_count, reportage_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+     (id, title, summary, category, priority, first_seen_at, last_seen_at, location_text, city, street, lat, lng, source_count, reportage_url, image_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
   ).run(
     incidentId,
     msg.title,
@@ -67,7 +68,8 @@ export function findOrCreateIncident(msg: NormalizedMessage): string {
     msg.street,
     msg.lat,
     msg.lng,
-    (meta.reportageUrl as string | null) ?? null
+    (meta.reportageUrl as string | null) ?? null,
+    msg.imageUrl ?? null
   )
 
   db.prepare(

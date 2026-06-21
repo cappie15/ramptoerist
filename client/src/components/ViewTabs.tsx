@@ -2,8 +2,9 @@ import { useNavigate, useLocation } from 'react-router-dom'
 
 const TABS = [
   { path: '/nearby', label: 'Dichtbij', icon: '📍' },
-  { path: '/map', label: 'Kaart', icon: '🗺️' },
   { path: '/recent', label: 'Recent', icon: '📋' },
+  { path: '/photos', label: "Met foto's", icon: '📸' },
+  { path: '/map', label: 'Kaart', icon: '🗺️' },
 ]
 
 export function ViewTabs() {

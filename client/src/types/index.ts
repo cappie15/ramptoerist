@@ -16,6 +16,7 @@ export interface Incident {
   lng: number | null
   sourceCount: number
   reportageUrl: string | null
+  imageUrl: string | null
   sources?: IncidentSource[]
   createdAt: string
   updatedAt: string

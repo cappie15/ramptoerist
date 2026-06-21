@@ -6,6 +6,7 @@ export interface RssItem {
   link: string
   pubDate: string
   guid: string
+  imageUrl?: string
 }
 
 function extractTag(xml: string, tag: string): string {
@@ -19,18 +20,34 @@ function extractTag(xml: string, tag: string): string {
   return ''
 }
 
+function extractImageUrl(raw: string): string | undefined {
+  // media:content url="..."
+  const mediaContent = /media:content[^>]+url=["']([^"']+)["']/i.exec(raw)
+  if (mediaContent) return mediaContent[1]
+  // media:thumbnail url="..."
+  const mediaThumbnail = /media:thumbnail[^>]+url=["']([^"']+)["']/i.exec(raw)
+  if (mediaThumbnail) return mediaThumbnail[1]
+  // <enclosure type="image/..." url="..." />
+  const enclosure = /<enclosure[^>]+type=["']image\/[^"']+["'][^>]+url=["']([^"']+)["']/i.exec(raw)
+    ?? /<enclosure[^>]+url=["']([^"']+)["'][^>]+type=["']image\/[^"']+["']/i.exec(raw)
+  if (enclosure) return enclosure[1]
+  return undefined
+}
+
 export function parseRssItems(xml: string): RssItem[] {
   const items: RssItem[] = []
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi
   let match: RegExpExecArray | null
   while ((match = itemRegex.exec(xml)) !== null) {
     const raw = match[1]
+    const imageUrl = extractImageUrl(raw)
     items.push({
       title: extractTag(raw, 'title'),
       description: extractTag(raw, 'description'),
       link: extractTag(raw, 'link'),
       pubDate: extractTag(raw, 'pubDate'),
       guid: extractTag(raw, 'guid'),
+      ...(imageUrl ? { imageUrl } : {}),
     })
   }
   return items

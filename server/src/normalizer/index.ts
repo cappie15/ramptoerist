@@ -27,6 +27,7 @@ export function normalizeMessage(raw: RawSourceMessage): NormalizedMessage {
     priority: raw.priority ?? 'prio2',
     lat: (meta.lat as number | undefined) ?? null,
     lng: (meta.lng as number | undefined) ?? null,
+    imageUrl: (meta.imageUrl as string | undefined) ?? null,
     metadata: raw.metadata,
   }
 }

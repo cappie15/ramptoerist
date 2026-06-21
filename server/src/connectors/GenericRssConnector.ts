@@ -57,7 +57,7 @@ export class GenericRssConnector extends BaseConnector {
         locationText,
         category: inferCategory(combined),
         priority: inferPriority(combined),
-        metadata: {},
+        metadata: item.imageUrl ? { imageUrl: item.imageUrl } : {},
       } satisfies RawSourceMessage]
     })
   }

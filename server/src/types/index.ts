@@ -30,6 +30,7 @@ export interface Incident {
   lng: number | null
   sourceCount: number
   reportageUrl: string | null
+  imageUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -61,5 +62,6 @@ export interface NormalizedMessage {
   priority: Priority
   lat: number | null
   lng: number | null
+  imageUrl: string | null
   metadata: Record<string, unknown>
 }

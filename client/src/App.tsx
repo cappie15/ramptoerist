@@ -6,6 +6,7 @@ import { ViewTabs } from './components/ViewTabs'
 import { RecentPage } from './pages/RecentPage'
 import { MapPage } from './pages/MapPage'
 import { NearbyPage } from './pages/NearbyPage'
+import { PhotosPage } from './pages/PhotosPage'
 import { IncidentDetailPage } from './pages/IncidentDetailPage'
 
 function MobileHeader() {
@@ -106,6 +107,17 @@ function AppRoutes() {
               <ViewTabs />
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <RecentPage />
+              </div>
+            </>
+          }
+        />
+        <Route
+          path="/photos"
+          element={
+            <>
+              <ViewTabs />
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <PhotosPage />
               </div>
             </>
           }
