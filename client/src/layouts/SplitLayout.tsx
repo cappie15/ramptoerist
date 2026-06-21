@@ -10,8 +10,9 @@ import { IncidentDetail } from '../components/IncidentDetail'
 import { SearchBar } from '../components/SearchBar'
 import { TimeFilter } from '../components/TimeFilter'
 import { RadiusSlider } from '../components/RadiusSlider'
+import { IncidentFilters } from '../components/IncidentFilters'
 import { haversineDistance } from '../utils/distance'
-import { filterByTime, type TimeRange } from '../utils/filters'
+import { filterByTime, filterByCategory, filterByPriority, type TimeRange, type CategoryFilter, type PriorityFilter } from '../utils/filters'
 import type { Incident } from '../types'
 
 type LeftView = 'nearby' | 'recent'
@@ -32,6 +33,8 @@ export function SplitLayout({ isDesktop }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [timeRange, setTimeRange] = useState<TimeRange>('2h')
   const [radiusKm, setRadiusKm] = useState(12)
+  const [catFilter, setCatFilter] = useState<CategoryFilter>(new Set())
+  const [prioFilter, setPrioFilter] = useState<PriorityFilter>(new Set())
   const [detailIncident, setDetailIncident] = useState<Incident | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
@@ -62,7 +65,7 @@ export function SplitLayout({ isDesktop }: Props) {
   const handleSelect = (id: string) => navigate(`/incident/${id}`)
   const handleClose = () => navigate(-1)
 
-  const timeFiltered = filterByTime(incidents, timeRange)
+  const timeFiltered = filterByPriority(filterByCategory(filterByTime(incidents, timeRange), catFilter), prioFilter)
 
   const displayedIncidents =
     activeView === 'nearby' && coords
@@ -203,6 +206,14 @@ export function SplitLayout({ isDesktop }: Props) {
               <TimeFilter value={timeRange} onChange={setTimeRange} />
             </>
           )}
+
+          {/* Category + priority filter — both views */}
+          <IncidentFilters
+            categories={catFilter}
+            priorities={prioFilter}
+            onCategoryChange={setCatFilter}
+            onPriorityChange={setPrioFilter}
+          />
 
           {/* Nearby status messages */}
           {activeView === 'nearby' && geoLoading && (
