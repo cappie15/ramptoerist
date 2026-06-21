@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { db } from '../db/database'
+import { incidentEmitter, INCIDENT_UPDATED } from '../events'
 import type { Incident, IncidentSource } from '../types'
 
 export const incidentRouter = Router()
@@ -35,6 +36,30 @@ function mapSource(row: Record<string, unknown>): IncidentSource {
     receivedAt: row.received_at as string,
   }
 }
+
+// SSE stream — clients subscribe and receive a 'refresh' ping when new data arrives
+incidentRouter.get('/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no') // disable nginx proxy buffering
+  res.flushHeaders()
+
+  res.write('event: connected\ndata: {}\n\n')
+
+  const onUpdate = (payload: { created: number; merged: number }) => {
+    res.write(`event: refresh\ndata: ${JSON.stringify(payload)}\n\n`)
+  }
+  incidentEmitter.on(INCIDENT_UPDATED, onUpdate)
+
+  // Heartbeat keeps the connection alive through idle proxies
+  const heartbeat = setInterval(() => res.write(':\n\n'), 25_000)
+
+  req.on('close', () => {
+    incidentEmitter.off(INCIDENT_UPDATED, onUpdate)
+    clearInterval(heartbeat)
+  })
+})
 
 incidentRouter.get('/', (_req, res) => {
   const rows = db.prepare(

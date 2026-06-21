@@ -13,8 +13,8 @@ export function useIncidents(searchQuery?: string): UseIncidentsResult {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchIncidents = useCallback(async () => {
-    setLoading(true)
+  const fetchIncidents = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const url = searchQuery
@@ -34,9 +34,25 @@ export function useIncidents(searchQuery?: string): UseIncidentsResult {
 
   useEffect(() => {
     fetchIncidents()
-    const interval = setInterval(fetchIncidents, 30000)
-    return () => clearInterval(interval)
-  }, [fetchIncidents])
+
+    if (searchQuery) {
+      // Search results don't benefit from SSE push; keep a light polling interval
+      const interval = setInterval(() => fetchIncidents(true), 30_000)
+      return () => clearInterval(interval)
+    }
+
+    // Main feed: subscribe to server-sent events for instant updates
+    const es = new EventSource('/api/incidents/stream')
+    es.addEventListener('refresh', () => fetchIncidents(true))
+
+    // Fallback poll in case the SSE connection stays broken for a full minute
+    const fallback = setInterval(() => fetchIncidents(true), 60_000)
+
+    return () => {
+      es.close()
+      clearInterval(fallback)
+    }
+  }, [fetchIncidents, searchQuery])
 
   return { incidents, loading, error, refetch: fetchIncidents }
 }

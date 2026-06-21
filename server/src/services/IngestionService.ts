@@ -3,6 +3,7 @@ import { normalizeMessage } from '../normalizer'
 import { findOrCreateIncident } from '../deduplicator'
 import { enrichWithGeocoderFallback } from '../geocoder'
 import { NominatimGeocoder } from '../geocoder/NominatimGeocoder'
+import { incidentEmitter, INCIDENT_UPDATED } from '../events'
 import type { RawSourceMessage } from '../types'
 
 export interface IngestResult {
@@ -50,6 +51,10 @@ export class IngestionService {
       this.seenSourceUrls.add(raw.sourceUrl)
       if (countAfter > countBefore) created++
       else merged++
+    }
+
+    if (created > 0 || merged > 0) {
+      incidentEmitter.emit(INCIDENT_UPDATED, { created, merged })
     }
 
     return { created, merged, skipped }
