@@ -145,15 +145,6 @@
       font-size: 0.85rem;
       line-height: 1.6;
     }
-    .err details { margin-top: 8px }
-    .err summary { cursor: pointer; font-size: 0.78rem; color: var(--muted) }
-    .err pre {
-      margin-top: 6px;
-      font-size: 0.7rem;
-      color: var(--muted);
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
     .retry {
       margin-top: 10px;
       padding: 8px 18px;
@@ -190,26 +181,10 @@
 <ul id="list"></ul>
 
 <script>
-// ── Configuratie ──────────────────────────────────────────────────────────────
-// CORS-proxies worden in volgorde geprobeerd
-const PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-]
-
-const FEEDS = [
-  'https://www.p2000-online.net/p2000.xml',
-  'https://feeds.alarmeringen.nl/feed/all',
-  'https://www.p2000.nl/p2000.xml',
-]
-
 const REFRESH_MS = 60_000
 
-// ── State ─────────────────────────────────────────────────────────────────────
 let all = [], hoursBack = 2
 
-// ── Hulpfuncties ──────────────────────────────────────────────────────────────
 function icon(title) {
   const t = title.toLowerCase()
   if (/brandweer|\bbrand\b|rook|vlam|bhv/.test(t))              return '🔥'
@@ -218,11 +193,6 @@ function icon(title) {
   if (/\bheli\b|traumaheli/.test(t))                            return '🚁'
   if (/redding|verdrink|reddingsbrigade/.test(t))               return '🚤'
   return '🔔'
-}
-
-function prio(title) {
-  const m = /\bp([123])\b/i.exec(title) || /prio\s*([123])/i.exec(title)
-  return m ? +m[1] : 0
 }
 
 function ago(d) {
@@ -237,48 +207,15 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
-// ── Fetch met proxy-fallback ───────────────────────────────────────────────────
-async function fetchFeed(url) {
-  const errors = []
-  for (const makeUrl of PROXIES) {
-    try {
-      const res = await fetch(makeUrl(url), { signal: AbortSignal.timeout(9000) })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const text = await res.text()
-      // Sanity check: response must look like XML
-      if (!text.trim().startsWith('<')) throw new Error('Geen XML ontvangen')
-      return text
-    } catch (e) {
-      errors.push(`${makeUrl(url).split('?')[0]}: ${e.message}`)
-    }
-  }
-  throw new Error(errors.join('\n'))
-}
-
-// ── XML parseren ──────────────────────────────────────────────────────────────
-function parseItems(xml) {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml')
-  if (doc.querySelector('parsererror')) return []
-  return [...doc.querySelectorAll('item, entry')].flatMap(el => {
-    const txt   = sel => el.querySelector(sel)?.textContent?.trim() ?? ''
-    const title = txt('title')
-    const link  = el.querySelector('link[href]')?.getAttribute('href') || txt('link') || txt('id')
-    const guid  = txt('guid') || txt('id') || link
-    const raw   = txt('pubDate') || txt('published') || txt('updated')
-    const date  = raw ? new Date(raw) : null
-    if (!title || !date || isNaN(date.getTime())) return []
-    return [{ title, link, guid, date, p: prio(title) }]
-  })
-}
-
-// ── Renderen ──────────────────────────────────────────────────────────────────
 function render() {
   const cutoff = hoursBack ? Date.now() - hoursBack * 3_600_000 : 0
-  const items  = all.filter(i => i.date >= cutoff)
+  const items  = all.filter(i => new Date(i.date).getTime() >= cutoff)
   const ul     = document.getElementById('list')
 
   if (!items.length) {
-    ul.innerHTML = '<li class="state">Geen incidenten in dit tijdvenster</li>'
+    ul.innerHTML = all.length
+      ? '<li class="state">Geen incidenten in dit tijdvenster</li>'
+      : '<li class="state">Eerste dataophaal loopt… even geduld (max. 5 min.)</li>'
     return
   }
 
@@ -292,60 +229,42 @@ function render() {
       <span class="card-icon">${icon(i.title)}</span>
       <div>
         <div class="card-title">${esc(i.title)}</div>
-        <div class="card-meta">${badge}<span>${ago(i.date)}</span></div>
+        <div class="card-meta">${badge}<span>${ago(new Date(i.date).getTime())}</span></div>
       </div>
     ${close}`
   }).join('')
 }
 
-// ── Laden ─────────────────────────────────────────────────────────────────────
 async function load() {
   const statusEl = document.getElementById('status')
   statusEl.textContent = 'Laden…'
   document.getElementById('list').innerHTML =
     '<li class="state"><span class="spinner"></span>Incidenten ophalen…</li>'
 
-  const results = await Promise.allSettled(FEEDS.map(fetchFeed))
-  const failLog = []
-  const seen    = new Set()
-  const items   = []
+  try {
+    const res = await fetch('data.json?t=' + Date.now())
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i]
-    if (r.status === 'rejected') {
-      failLog.push(`${FEEDS[i]}\n${r.reason?.message}`)
-      continue
-    }
-    for (const item of parseItems(r.value)) {
-      if (!seen.has(item.guid)) { seen.add(item.guid); items.push(item) }
-    }
-  }
+    all = (data.items || [])
+    render()
 
-  if (!items.length) {
-    const detail = failLog.length
-      ? `<details><summary>Technische details (${failLog.length} fout${failLog.length > 1 ? 'en' : ''})</summary><pre>${esc(failLog.join('\n\n'))}</pre></details>`
-      : ''
+    const fetchedAt = data.fetchedAt ? new Date(data.fetchedAt) : null
+    const time = fetchedAt
+      ? fetchedAt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
+      : new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
+    statusEl.textContent = `${all.length} · ${time}`
+  } catch (err) {
     document.getElementById('list').innerHTML = `
       <div class="err">
         <strong>⚠️ Kon geen incidenten laden</strong><br>
-        Alle CORS-proxies gaven een fout. Controleer je verbinding of probeer opnieuw.
-        ${detail}
+        Kon data.json niet ophalen. Probeer opnieuw.
         <br><button class="retry" onclick="load()">Opnieuw proberen</button>
       </div>`
     statusEl.textContent = 'Fout'
-    return
   }
-
-  // Toon partial warning als sommige feeds faalden maar anderen slaagden
-  all = items.sort((a, b) => b.date - a.date)
-  render()
-
-  const time = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
-  const warn = failLog.length ? ` (${failLog.length} bron${failLog.length > 1 ? 'nen' : ''} fout)` : ''
-  statusEl.textContent = `${items.length}${warn} · ${time}`
 }
 
-// ── Tijdfilter ────────────────────────────────────────────────────────────────
 document.getElementById('timeFilter').addEventListener('click', e => {
   const btn = e.target.closest('[data-h]')
   if (!btn) return
@@ -354,7 +273,6 @@ document.getElementById('timeFilter').addEventListener('click', e => {
   render()
 })
 
-// ── Start + auto-refresh ──────────────────────────────────────────────────────
 load()
 setInterval(load, REFRESH_MS)
 </script>
