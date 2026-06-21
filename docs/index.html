@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#c53030">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Ramptoerist</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
@@ -38,7 +37,6 @@
       line-height: 1.4;
     }
 
-    /* ── Header ── */
     .hdr {
       background: #c53030;
       color: #fff;
@@ -50,9 +48,9 @@
       align-items: center;
       gap: 10px;
     }
-    .hdr-icon { font-size: 1.35rem }
+    .hdr-icon  { font-size: 1.35rem }
     .hdr-title { font-weight: 700; font-size: 1.05rem }
-    .hdr-sub { font-size: 0.65rem; opacity: 0.8 }
+    .hdr-sub   { font-size: 0.65rem; opacity: 0.8 }
     .hdr-status {
       margin-left: auto;
       font-size: 0.72rem;
@@ -61,7 +59,6 @@
       white-space: nowrap;
     }
 
-    /* ── Time filter ── */
     .filters {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -92,7 +89,6 @@
       font-weight: 600;
     }
 
-    /* ── Cards ── */
     #list { list-style: none }
 
     .card {
@@ -108,15 +104,9 @@
     }
     .card:active { opacity: 0.65 }
 
-    .card-icon { font-size: 1.25rem; flex-shrink: 0; padding-top: 1px }
-
-    .card-title {
-      font-size: 0.88rem;
-      font-weight: 600;
-      line-height: 1.35;
-    }
-
-    .card-meta {
+    .card-icon  { font-size: 1.25rem; flex-shrink: 0; padding-top: 1px }
+    .card-title { font-size: 0.88rem; font-weight: 600; line-height: 1.35 }
+    .card-meta  {
       margin-top: 4px;
       font-size: 0.74rem;
       color: var(--muted);
@@ -126,17 +116,11 @@
       flex-wrap: wrap;
     }
 
-    .badge {
-      font-weight: 700;
-      font-size: 0.7rem;
-      padding: 1px 5px;
-      border-radius: 4px;
-    }
-    .p1 { color: #e53e3e; background: rgba(229,62,62,.12) }
-    .p2 { color: #dd6b20; background: rgba(221,107,32,.12) }
-    .p3 { color: var(--muted) }
+    .badge { font-weight: 700; font-size: 0.7rem; padding: 1px 5px; border-radius: 4px }
+    .p1    { color: #e53e3e; background: rgba(229,62,62,.12) }
+    .p2    { color: #dd6b20; background: rgba(221,107,32,.12) }
+    .p3    { color: var(--muted) }
 
-    /* ── States ── */
     .state {
       padding: 48px 20px;
       text-align: center;
@@ -154,18 +138,20 @@
     @keyframes spin { to { transform: rotate(360deg) } }
 
     .err {
-      margin: 16px;
+      margin: 14px;
       padding: 14px 16px;
       background: rgba(229,62,62,.1);
       border-radius: 10px;
       font-size: 0.85rem;
       line-height: 1.6;
     }
-    .err code {
-      display: block;
-      margin-top: 8px;
-      font-size: 0.72rem;
+    .err details { margin-top: 8px }
+    .err summary { cursor: pointer; font-size: 0.78rem; color: var(--muted) }
+    .err pre {
+      margin-top: 6px;
+      font-size: 0.7rem;
       color: var(--muted);
+      white-space: pre-wrap;
       word-break: break-all;
     }
     .retry {
@@ -204,26 +190,33 @@
 <ul id="list"></ul>
 
 <script>
-// ── Configuratie ─────────────────────────────────────────────────────────────
-const PROXY = 'https://corsproxy.io/?url='
+// ── Configuratie ──────────────────────────────────────────────────────────────
+// CORS-proxies worden in volgorde geprobeerd
+const PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+]
+
 const FEEDS = [
   'https://www.p2000-online.net/p2000.xml',
   'https://feeds.alarmeringen.nl/feed/all',
   'https://www.p2000.nl/p2000.xml',
 ]
+
 const REFRESH_MS = 60_000
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 let all = [], hoursBack = 2
 
-// ── Hulpfuncties ─────────────────────────────────────────────────────────────
+// ── Hulpfuncties ──────────────────────────────────────────────────────────────
 function icon(title) {
   const t = title.toLowerCase()
-  if (/brandweer|\bbrand\b|rook|vlam|bhv/.test(t))          return '🔥'
+  if (/brandweer|\bbrand\b|rook|vlam|bhv/.test(t))              return '🔥'
   if (/\bambu\b|ambulan|\bmaz\b|mmaz|trauma|reanimati/.test(t)) return '🚑'
-  if (/politie|\bobj\s+\d/.test(t))                          return '🚔'
-  if (/\bheli\b|traumaheli/.test(t))                         return '🚁'
-  if (/redding|verdrink|reddingsbrigade/.test(t))            return '🚤'
+  if (/politie|\bobj\s+\d/.test(t))                             return '🚔'
+  if (/\bheli\b|traumaheli/.test(t))                            return '🚁'
+  if (/redding|verdrink|reddingsbrigade/.test(t))               return '🚤'
   return '🔔'
 }
 
@@ -244,17 +237,30 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
-// ── Ophalen & parseren ────────────────────────────────────────────────────────
-async function fetchXml(url) {
-  const res = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(9000) })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.text()
+// ── Fetch met proxy-fallback ───────────────────────────────────────────────────
+async function fetchFeed(url) {
+  const errors = []
+  for (const makeUrl of PROXIES) {
+    try {
+      const res = await fetch(makeUrl(url), { signal: AbortSignal.timeout(9000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const text = await res.text()
+      // Sanity check: response must look like XML
+      if (!text.trim().startsWith('<')) throw new Error('Geen XML ontvangen')
+      return text
+    } catch (e) {
+      errors.push(`${makeUrl(url).split('?')[0]}: ${e.message}`)
+    }
+  }
+  throw new Error(errors.join('\n'))
 }
 
+// ── XML parseren ──────────────────────────────────────────────────────────────
 function parseItems(xml) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml')
+  if (doc.querySelector('parsererror')) return []
   return [...doc.querySelectorAll('item, entry')].flatMap(el => {
-    const txt  = sel => el.querySelector(sel)?.textContent?.trim() ?? ''
+    const txt   = sel => el.querySelector(sel)?.textContent?.trim() ?? ''
     const title = txt('title')
     const link  = el.querySelector('link[href]')?.getAttribute('href') || txt('link') || txt('id')
     const guid  = txt('guid') || txt('id') || link
@@ -265,7 +271,7 @@ function parseItems(xml) {
   })
 }
 
-// ── Renderen ─────────────────────────────────────────────────────────────────
+// ── Renderen ──────────────────────────────────────────────────────────────────
 function render() {
   const cutoff = hoursBack ? Date.now() - hoursBack * 3_600_000 : 0
   const items  = all.filter(i => i.date >= cutoff)
@@ -299,33 +305,44 @@ async function load() {
   document.getElementById('list').innerHTML =
     '<li class="state"><span class="spinner"></span>Incidenten ophalen…</li>'
 
-  const results = await Promise.allSettled(FEEDS.map(fetchXml))
-  const errors  = []
+  const results = await Promise.allSettled(FEEDS.map(fetchFeed))
+  const failLog = []
   const seen    = new Set()
   const items   = []
 
-  for (const r of results) {
-    if (r.status === 'rejected') { errors.push(r.reason?.message ?? 'onbekend'); continue }
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]
+    if (r.status === 'rejected') {
+      failLog.push(`${FEEDS[i]}\n${r.reason?.message}`)
+      continue
+    }
     for (const item of parseItems(r.value)) {
       if (!seen.has(item.guid)) { seen.add(item.guid); items.push(item) }
     }
   }
 
   if (!items.length) {
+    const detail = failLog.length
+      ? `<details><summary>Technische details (${failLog.length} fout${failLog.length > 1 ? 'en' : ''})</summary><pre>${esc(failLog.join('\n\n'))}</pre></details>`
+      : ''
     document.getElementById('list').innerHTML = `
       <div class="err">
         <strong>⚠️ Kon geen incidenten laden</strong><br>
-        Controleer je internetverbinding of probeer opnieuw.
-        <code>${errors.join(' · ')}</code>
+        Alle CORS-proxies gaven een fout. Controleer je verbinding of probeer opnieuw.
+        ${detail}
         <br><button class="retry" onclick="load()">Opnieuw proberen</button>
       </div>`
     statusEl.textContent = 'Fout'
     return
   }
 
+  // Toon partial warning als sommige feeds faalden maar anderen slaagden
   all = items.sort((a, b) => b.date - a.date)
   render()
-  statusEl.textContent = `${items.length} · ${new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}`
+
+  const time = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
+  const warn = failLog.length ? ` (${failLog.length} bron${failLog.length > 1 ? 'nen' : ''} fout)` : ''
+  statusEl.textContent = `${items.length}${warn} · ${time}`
 }
 
 // ── Tijdfilter ────────────────────────────────────────────────────────────────
