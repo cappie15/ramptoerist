@@ -59,6 +59,32 @@
       white-space: nowrap;
     }
 
+    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    .tabs {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 4px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      border-bottom: 3px solid transparent;
+      -webkit-tap-highlight-color: transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.on {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Time filter chips ────────────────────────────────────────────── */
     .filters {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -89,6 +115,7 @@
       font-weight: 600;
     }
 
+    /* ── Cards ────────────────────────────────────────────────────────── */
     #list { list-style: none }
 
     .card {
@@ -105,6 +132,7 @@
     .card:active { opacity: 0.65 }
 
     .card-icon  { font-size: 1.25rem; flex-shrink: 0; padding-top: 1px }
+    .card-body  { flex: 1; min-width: 0 }
     .card-title { font-size: 0.88rem; font-weight: 600; line-height: 1.35 }
     .card-meta  {
       margin-top: 4px;
@@ -116,10 +144,28 @@
       flex-wrap: wrap;
     }
 
+    /* Photo thumbnail */
+    .card-thumb {
+      flex-shrink: 0;
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: var(--border);
+    }
+
     .badge { font-weight: 700; font-size: 0.7rem; padding: 1px 5px; border-radius: 4px }
     .p1    { color: #e53e3e; background: rgba(229,62,62,.12) }
     .p2    { color: #dd6b20; background: rgba(221,107,32,.12) }
     .p3    { color: var(--muted) }
+
+    /* Distance badge */
+    .dist {
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .dist::before { content: '📍 ' }
 
     .state {
       padding: 48px 20px;
@@ -157,6 +203,32 @@
       cursor: pointer;
       font-family: inherit;
     }
+
+    /* Location permission notice */
+    .geo-notice {
+      margin: 12px 14px;
+      padding: 12px 14px;
+      background: rgba(49,130,206,.1);
+      border-radius: 10px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .geo-notice-icon { font-size: 1.2rem; flex-shrink: 0 }
+    .geo-btn {
+      margin-top: 8px;
+      padding: 7px 16px;
+      background: #3182ce;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
   </style>
 </head>
 <body>
@@ -169,6 +241,12 @@
   </div>
   <div class="hdr-status" id="status">Laden…</div>
 </header>
+
+<div class="tabs" id="tabBar">
+  <button class="tab on" data-tab="recent">Recent</button>
+  <button class="tab"    data-tab="nearby">Dichtbij</button>
+  <button class="tab"    data-tab="photos">Met foto's</button>
+</div>
 
 <div class="filters" id="timeFilter">
   <button class="chip"    data-h="1">1 uur</button>
@@ -183,24 +261,36 @@
 <script>
 const REFRESH_MS = 60_000
 
-let all = [], hoursBack = 2
+let all = [], hoursBack = 2, activeTab = 'recent'
+let userLat = null, userLng = null, geoState = 'idle' // idle | pending | ok | denied
+
+// ── Haversine distance (km) ─────────────────────────────────────────────────
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
+function fmtDist(km) {
+  if (km < 1) return `${Math.round(km * 1000)} m`
+  if (km < 10) return `${km.toFixed(1)} km`
+  return `${Math.round(km)} km`
+}
 
 function icon(title, link) {
   const t = title.toLowerCase()
   const l = (link || '').toLowerCase()
-  // Ambulance: a1/a2/a3 prefix (P2000 raw format), or keywords in title/link
   if (/^\s*a[123]\b/.test(t) || /\bambu\b|ambulan|\bmaz\b|mmaz|reanimati/.test(t) || /ambulance/.test(l))
     return '🚑'
-  // Traumaheli — check before generic brandweer
   if (/\bheli\b|traumaheli/.test(t))
     return '🚁'
-  // Fire: brandweer, brand, rook, vlam, bhv, gas
   if (/brandweer|\bbrand\b|rook|vlam|bhv|gaslucht|stank/.test(t) || /brandweer|brand|gaslucht/.test(l))
     return '🔥'
-  // Police: politie, steek, verdacht, diefstal, beroving, aanrijding, mishandel
   if (/politie|\bobj\s+\d|steek|verdacht|diefstal|beroving|aanrijding|mishandel/.test(t) || /politie/.test(l))
     return '🚔'
-  // Water rescue
   if (/redding|verdrink|reddingsbrigade|knrm/.test(t))
     return '🚤'
   return '🔔'
@@ -218,34 +308,97 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
+// ── Geolocation ─────────────────────────────────────────────────────────────
+function requestLocation() {
+  if (!navigator.geolocation) { geoState = 'denied'; render(); return }
+  geoState = 'pending'
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude
+      userLng = pos.coords.longitude
+      geoState = 'ok'
+      render()
+    },
+    () => { geoState = 'denied'; render() },
+    { enableHighAccuracy: false, timeout: 10_000 }
+  )
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
 function render() {
   const cutoff = hoursBack ? Date.now() - hoursBack * 3_600_000 : 0
-  const items  = all.filter(i => new Date(i.date).getTime() >= cutoff)
-  const ul     = document.getElementById('list')
+  let items = all.filter(i => new Date(i.date).getTime() >= cutoff)
+  const ul = document.getElementById('list')
+
+  // "Dichtbij" tab needs location
+  if (activeTab === 'nearby') {
+    if (geoState === 'idle') {
+      ul.innerHTML = `
+        <li>
+          <div class="geo-notice">
+            <span class="geo-notice-icon">📍</span>
+            <div>
+              <strong>Locatietoegang nodig</strong><br>
+              Sta locatietoegang toe om incidenten op afstand te sorteren.
+              <br><button class="geo-btn" onclick="requestLocation()">Locatie delen</button>
+            </div>
+          </div>
+        </li>`
+      return
+    }
+    if (geoState === 'pending') {
+      ul.innerHTML = '<li class="state"><span class="spinner"></span>Locatie ophalen…</li>'
+      return
+    }
+    if (geoState === 'denied') {
+      ul.innerHTML = '<li class="state">Locatietoegang geweigerd.<br>Controleer je browserinstellingen.</li>'
+      return
+    }
+    // Sort by distance; only show items with known coords
+    items = items
+      .filter(i => i.lat != null && i.lng != null)
+      .map(i => ({ ...i, _dist: haversine(userLat, userLng, i.lat, i.lng) }))
+      .sort((a, b) => a._dist - b._dist)
+  }
+
+  // "Met foto's" tab
+  if (activeTab === 'photos') {
+    items = items.filter(i => i.img)
+  }
 
   if (!items.length) {
     ul.innerHTML = all.length
-      ? '<li class="state">Geen incidenten in dit tijdvenster</li>'
+      ? (activeTab === 'photos'
+          ? '<li class="state">Geen foto\'s beschikbaar in dit tijdvenster</li>'
+          : activeTab === 'nearby'
+          ? '<li class="state">Geen incidenten met bekende locatie in dit tijdvenster</li>'
+          : '<li class="state">Geen incidenten in dit tijdvenster</li>')
       : '<li class="state">Eerste dataophaal loopt… even geduld (max. 5 min.)</li>'
     return
   }
 
   ul.innerHTML = items.map(i => {
     const badge = i.p ? `<span class="badge p${i.p}">P${i.p}</span>` : ''
+    const distBadge = i._dist != null ? `<span class="dist">${fmtDist(i._dist)}</span>` : ''
+    const thumb = (activeTab === 'photos' && i.img)
+      ? `<img class="card-thumb" src="${esc(i.img)}" alt="" loading="lazy">`
+      : ''
     const wrap  = i.link
       ? `<a class="card" href="${esc(i.link)}" target="_blank" rel="noopener">`
       : '<div class="card">'
     const close = i.link ? '</a>' : '</div>'
     return `${wrap}
       <span class="card-icon">${icon(i.title, i.link)}</span>
-      <div>
+      <div class="card-body">
         <div class="card-title">${esc(i.title)}</div>
-        <div class="card-meta">${badge}<span>${ago(new Date(i.date).getTime())}</span></div>
+        <div class="card-meta">${badge}${distBadge}<span>${ago(new Date(i.date).getTime())}</span></div>
       </div>
+      ${thumb}
     ${close}`
   }).join('')
 }
 
+// ── Load data ────────────────────────────────────────────────────────────────
 async function load() {
   const statusEl = document.getElementById('status')
   statusEl.textContent = 'Laden…'
@@ -275,6 +428,19 @@ async function load() {
     statusEl.textContent = 'Fout'
   }
 }
+
+// ── Event listeners ──────────────────────────────────────────────────────────
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('[data-tab]')
+  if (!btn) return
+  activeTab = btn.dataset.tab
+  document.querySelectorAll('#tabBar .tab').forEach(t => t.classList.toggle('on', t === btn))
+  if (activeTab === 'nearby' && geoState === 'idle') {
+    requestLocation()
+  } else {
+    render()
+  }
+})
 
 document.getElementById('timeFilter').addEventListener('click', e => {
   const btn = e.target.closest('[data-h]')
