@@ -185,13 +185,24 @@ const REFRESH_MS = 60_000
 
 let all = [], hoursBack = 2
 
-function icon(title) {
+function icon(title, link) {
   const t = title.toLowerCase()
-  if (/brandweer|\bbrand\b|rook|vlam|bhv/.test(t))              return '🔥'
-  if (/\bambu\b|ambulan|\bmaz\b|mmaz|trauma|reanimati/.test(t)) return '🚑'
-  if (/politie|\bobj\s+\d/.test(t))                             return '🚔'
-  if (/\bheli\b|traumaheli/.test(t))                            return '🚁'
-  if (/redding|verdrink|reddingsbrigade/.test(t))               return '🚤'
+  const l = (link || '').toLowerCase()
+  // Ambulance: a1/a2/a3 prefix (P2000 raw format), or keywords in title/link
+  if (/^\s*a[123]\b/.test(t) || /\bambu\b|ambulan|\bmaz\b|mmaz|reanimati/.test(t) || /ambulance/.test(l))
+    return '🚑'
+  // Traumaheli — check before generic brandweer
+  if (/\bheli\b|traumaheli/.test(t))
+    return '🚁'
+  // Fire: brandweer, brand, rook, vlam, bhv, gas
+  if (/brandweer|\bbrand\b|rook|vlam|bhv|gaslucht|stank/.test(t) || /brandweer|brand|gaslucht/.test(l))
+    return '🔥'
+  // Police: politie, steek, verdacht, diefstal, beroving, aanrijding, mishandel
+  if (/politie|\bobj\s+\d|steek|verdacht|diefstal|beroving|aanrijding|mishandel/.test(t) || /politie/.test(l))
+    return '🚔'
+  // Water rescue
+  if (/redding|verdrink|reddingsbrigade|knrm/.test(t))
+    return '🚤'
   return '🔔'
 }
 
@@ -226,7 +237,7 @@ function render() {
       : '<div class="card">'
     const close = i.link ? '</a>' : '</div>'
     return `${wrap}
-      <span class="card-icon">${icon(i.title)}</span>
+      <span class="card-icon">${icon(i.title, i.link)}</span>
       <div>
         <div class="card-title">${esc(i.title)}</div>
         <div class="card-meta">${badge}<span>${ago(new Date(i.date).getTime())}</span></div>

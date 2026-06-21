@@ -100,9 +100,20 @@ def parse_date(raw: str) -> datetime | None:
 
 
 def prio(title: str) -> int:
-    m = re.search(r'\bp([123])\b', title, re.IGNORECASE) or \
-        re.search(r'prio\s*([123])', title, re.IGNORECASE)
+    t = title.strip()
+    # P2000 ambulance prefix: a1/a2/a3 at start of message
+    m = re.match(r'^\s*a([123])\b', t, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    # Standard: p1/p2/p3 word, or prio N
+    m = re.search(r'\bp([123])\b', t, re.IGNORECASE) or \
+        re.search(r'prio\s*([123])', t, re.IGNORECASE)
     return int(m.group(1)) if m else 0
+
+
+def is_test(title: str) -> bool:
+    """Filter out P2000 test transmissions."""
+    return bool(re.search(r'\btest(oproep|melding|bericht|transmissie)?\b', title, re.IGNORECASE))
 
 
 def parse_feed(xml_text: str) -> list[dict]:
@@ -136,7 +147,7 @@ def parse_feed(xml_text: str) -> list[dict]:
             or ''
         )
         date = parse_date(raw_date)
-        if title and guid and date:
+        if title and guid and date and not is_test(title):
             items.append({'title': title, 'link': link, 'guid': guid,
                           'date': date.isoformat(), 'p': prio(title)})
 
@@ -147,7 +158,7 @@ def parse_feed(xml_text: str) -> list[dict]:
         guid = (item.findtext('guid') or link or '').strip()
         raw_date = (item.findtext('pubDate') or '').strip()
         date = parse_date(raw_date)
-        if title and guid and date:
+        if title and guid and date and not is_test(title):
             items.append({'title': title, 'link': link, 'guid': guid,
                           'date': date.isoformat(), 'p': prio(title)})
 
