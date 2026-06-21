@@ -15,11 +15,36 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch feeds
-        run: python3 scripts/fetch-feeds.py
+        id: fetch
+        run: |
+          python3 scripts/fetch-feeds.py && echo "ok=true" >> "$GITHUB_OUTPUT" || echo "ok=false" >> "$GITHUB_OUTPUT"
+
+      - name: Show result summary
+        run: |
+          echo "=== data.json preview ==="
+          python3 -c "
+          import json
+          d = json.load(open('docs/data.json'))
+          print(f'fetchedAt : {d[\"fetchedAt\"]}')
+          print(f'groups ok : {d.get(\"groupsOk\",\"?\")} / {d.get(\"totalGroups\",\"?\")}')
+          print(f'items     : {len(d[\"items\"])}')
+          if d['items']:
+              print()
+              print('Last 3 items:')
+              for it in d['items'][:3]:
+                  print(f'  [{it[\"date\"][:16]}] {it[\"title\"][:80]}')
+          "
 
       - name: Commit data if changed
+        if: steps.fetch.outputs.ok == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/data.json
-          git diff --staged --quiet && echo "No changes" || (git commit -m "chore: update P2000 feed data" && git push)
+          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: update P2000 feed data" && git push)
+
+      - name: Fail job if no data fetched
+        if: steps.fetch.outputs.ok == 'false'
+        run: |
+          echo "::error::All feed groups failed — no items written to data.json"
+          exit 1
